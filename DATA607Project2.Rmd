@@ -2,7 +2,10 @@
 title: "DATA607Project2"
 author: "Erick Hadi"
 date: "2024-10-13"
-output: html_document
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -32,13 +35,160 @@ library(dplyr)
 library(tidyverse)
 library(ggplot2)
 ```
+Load all the data 
+```{r}
+dataLink1 <- "https://raw.githubusercontent.com/ErickH1/DATA607Project2/refs/heads/main/country_results_df.csv"
+dataLink2 <- "https://raw.githubusercontent.com/ErickH1/DATA607Project2/refs/heads/main/world_population.csv"
+dataLink3 <- "https://raw.githubusercontent.com/ErickH1/DATA607Project2/refs/heads/main/MTA_Daily_Ridership.csv"
+```
+
 ## Dataset 1 ---:
+Description
+```{r}
+country_data <- read.csv(dataLink1)
+head(country_data)
+```
+## Dataset 1 Tidy Data:
+```{r}
+long_data <- country_data %>%
+  select(-p1:p7) %>%
+  pivot_longer(cols = p1:p7, names_to = "position", values_to = "score")
+head(long_data)
+```
 
 ```{r}
+total_points <- long_data %>%
+  group_by(country, year) %>%
+  summarise(total_points = sum(score, na.rm = TRUE))
+
+tidy_data <- total_points %>%
+  select(country, year, total_points)
+
+tidy_data_filtered <- tidy_data %>%
+  filter(year >= 2014 & year <= 2024)
+
+tidy_data_filtered$year <- as.factor(tidy_data_filtered$year)
+
+head(tidy_data_filtered,20)
+```
+```{r}
+country_totals <- tidy_data_filtered %>%
+  group_by(country) %>%
+  summarise(total_country_points = sum(total_points)) %>%
+  arrange(desc(total_country_points))
+
+top_10_countries <- country_totals %>%
+  slice(1:10) %>%
+  pull(country)
+
+tidy_data_filtered_top_10 <- tidy_data_filtered %>%
+  filter(country %in% top_10_countries)
+
+head(tidy_data_filtered_top_10,40)
+```
+## Dataset 1 Data Analysis:
+```{r}
+# Create the plot
+ggplot(tidy_data_filtered_top_10, aes(x = year, y = total_points, color = country, group = country)) +
+  geom_line() +
+  labs(title = "Total Points by Country (Last 10 Years)",
+       x = "Year",
+       y = "Total Points",
+       color = "Country") +
+  theme_minimal()
+```
+
+## Dataset 1 Conclusion:
+In summary the data was tidied to only include observations for total points over the years for the top 20 countries in the Math Olympiad. The data was then graphed which each line observing the countries and the total points. We can see that the countries have the same dips and peaks indicating potential difficult and easier years. It also showcases which country performed the best (China) and worst within the top 20 (Thailand)
+
+## Dataset 2 ---:
+Description
+```{r}
+world_data <- read.csv(dataLink2)
+head(world_data)
+```
+## Dataset 2 Tidy Data:
+```{r}
+world_data <- world_data %>%
+  rename("Country/Territory" = Country.Territory, "2022" = X2022.Population, "2020" = X2020.Population, "2015" = X2015.Population, "2010" = X2010.Population, "2000" = X2000.Population, "1990" = X1990.Population, "1980" = X1980.Population, "1970" = X1970.Population, "Area (km)" = Area..km.., "Density per km" = Density..per.km.., "Growth Rate" = Growth.Rate, "World Population Percentage" = World.Population.Percentage)
+
+world_data_long <- world_data %>%
+  pivot_longer(`2022`:`1970`, names_to = "Year", values_to = "Population")
+
+head(world_data_long)
+```
+```{r}
+world_data_tidy <- world_data_long %>%
+  group_by(Year, Continent) %>%
+  summarise(Total_Population = sum(Population))
+
+world_data_tidy$Year <- as.numeric(as.character(world_data_tidy$Year))
+
+glimpse(world_data_tidy)
+```
+## Dataset 2 Data Analysis:
+```{r}
+ggplot(data = world_data_tidy, aes(x = Year, y = Total_Population, color = Continent)) +
+  geom_line(linewidth = 1) +
+  ggtitle("World Population Over Time by Continent") +
+  xlab("Year") +
+  ylab("Total Population") +
+  theme_minimal()
+```
+
+## Dataset 2 Conclusion:
+In conclusion the data was tidied to showcase only the total population for each continent over the years. The data was then graphed on a line graph. It showcases the countries with the high total population (Asia) and the lowest (Oceania). It also showcases the trends and slope throguhtout the years. 
+
+## Dataset 3 ---:
+Description
+```{r}
+mta_data <- read_csv(dataLink3)
+head(mta_data)
+```
+## Dataset 3 Tidy Data:
+```{r}
+# Change from wide to long data 
+mta_data_long <- mta_data %>%
+  pivot_longer(-Date, names_to =c("transportation","percent_prepandemic"),
+               names_sep = ":", ) %>%
+  pivot_wider(names_from = percent_prepandemic, values_from = value)
+
+mta_data_long <- mta_data_long %>%
+  select(-c(` Total Scheduled Trips`, ` Total Traffic`))
+
+mta_data_long <- mta_data_long %>%
+  rename(total_ridership = ` Total Estimated Ridership`)
+
+head(mta_data_long)
+glimpse(mta_data_long)
+```
+```{r}
+# Convert the date column to a proper date format
+mta_data_long$Date <- as.Date(mta_data_long$Date, format = "%m/%d/%y")
+
+# Extract the year from the date column
+mta_data_long$Year <- as.numeric(format(mta_data_long$Date, "%Y"))
+
+# View the first few rows of the updated DataFrame
+head(mta_data_long)
+mta_data_tidy <- mta_data_long %>%
+  group_by(Year, transportation) %>%
+  summarize(mean_total_ride = mean(total_ridership))
+
+glimpse(mta_data_tidy)
+```
+
+## Dataset 3 Data Analysis:
+```{r}
+ggplot(data = mta_data_tidy, aes(x = factor(Year), y = mean_total_ride, fill = transportation)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  ggtitle("Average Ridership over the Years by transport") +
+  xlab("Year") +
+  ylab("Average Total Riders") +
+  theme_minimal() +
+  scale_x_discrete(labels = c("2020", "2021", "2022", "2023", "2024"))
 
 ```
 
-## Dataset 2 ---:
-
-## Dataset 3 ---:
-
+## Dataset 3 Conclusion:
+In conclusion the data was tidied by only including the Average total riders over the years based on transportation method. The mean ridership was then calculated based on the transportation and then graphed. The graph showcases the yearly trend and which transport had the most (Subway) and which had the least (hard to tell because of large difference but it is either acces a ride or bridges and tunnels) 
